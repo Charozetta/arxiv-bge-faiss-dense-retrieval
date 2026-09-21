@@ -1,5 +1,8 @@
 # arXiv Dense Retrieval with BGE & FAISS
 
+<img width="665" height="300" alt="image" src="https://github.com/user-attachments/assets/40492315-0455-4b21-80fe-32aa0e538ae9" />
+
+
 A reproducible Google Colab baseline for retrieving relevant arXiv papers from natural-language queries. The project uses the `BAAI/bge-base-en-v1.5` embedding model and an exact FAISS index to rank paper titles and abstracts by cosine similarity.
 
 The notebook evaluates retrieval quality with **Mean Reciprocal Rank at 5 (MRR@5)** and profiles sequential query latency by separating embedding, FAISS search, and result post-processing.
@@ -210,11 +213,3 @@ Do not commit the following files until their redistribution terms have been che
 - ONNX exports.
 
 The repository should contain code and documentation only unless the data license explicitly permits redistribution.
-
-## References
-
-[1]: https://huggingface.co/BAAI/bge-base-en-v1.5 "BAAI/bge-base-en-v1.5 model card"
-
-[2]: https://github.com/facebookresearch/faiss "FAISS: A library for efficient similarity search"
-
-[3]: https://arxiv.org/abs/1708.03629 "Billion-scale similarity search with GPUs"
