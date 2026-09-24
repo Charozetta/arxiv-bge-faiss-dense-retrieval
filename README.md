@@ -1,215 +1,87 @@
-# arXiv Dense Retrieval with BGE & FAISS
+# arXiv Dense Retrieval with BGE and FAISS
 
-<img width="665" height="300" alt="image" src="https://github.com/user-attachments/assets/40492315-0455-4b21-80fe-32aa0e538ae9" />
+<img width="665" height="300" alt="Latency profiling of the dense-retrieval baseline" src="https://github.com/user-attachments/assets/40492315-0455-4b21-80fe-32aa0e538ae9" />
 
+A documented Google Colab experiment in **dense document retrieval** over arXiv paper titles and abstracts. Given an English natural-language query, the system returns ranked paper identifiers, titles, and cosine-similarity scores. It uses `BAAI/bge-base-en-v1.5` for embeddings and an exact FAISS index for retrieval. [1] [2]
 
-A reproducible Google Colab baseline for retrieving relevant arXiv papers from natural-language queries. The project uses the `BAAI/bge-base-en-v1.5` embedding model and an exact FAISS index to rank paper titles and abstracts by cosine similarity.
+This project is intentionally limited to retrieval. It does not implement question answering, retrieval-augmented generation, scientific advice generation, a recommendation system, or a reranking stage.
 
-The notebook evaluates retrieval quality with **Mean Reciprocal Rank at 5 (MRR@5)** and profiles sequential query latency by separating embedding, FAISS search, and result post-processing.
+## Final results
 
-## Overview
+The final CLS-pooling configuration was evaluated on **1,000 labelled queries** over **98,213 indexed paper records**. The target for the coursework task was `MRR@5 > 0.91`.
 
-This project implements **document retrieval** over a fixed collection of arXiv papers. Given a natural-language query, it returns a ranked list of paper identifiers, titles, and similarity scores.
+| Measure | Result |
+| --- | ---: |
+| **MRR@5** | **0.9160** |
+| Coursework target | **Met** |
+| Document-embedding time | 560.5 seconds |
+| Embedding dimension | 768 |
+| Documents truncated at 512 tokens | 792 / 98,213 (**0.81%**) |
+| Longest evaluation query | 78 tokens |
 
-It does not implement:
+The latency benchmark used a 50-query warm-up. PyTorch had access to an NVIDIA A100-SXM4-40GB GPU for query embedding, while FAISS `IndexFlatIP` ran on CPU.
 
-- question answering;
+| Retrieval stage | Mean ms | Median ms | p95 ms |
+| --- | ---: | ---: | ---: |
+| Query embedding | 9.85 | 9.79 | 10.39 |
+| Exact FAISS search | 11.97 | 9.41 | 23.18 |
+| Result materialisation | 0.62 | 0.61 | 0.65 |
+| **End-to-end total** | **22.44** | **19.87** | **33.69** |
 
-- retrieval-augmented generation (RAG);
+Observed sequential throughput was **44.51 queries per second**. In this run, FAISS search accounted for 53.4% of mean component time, query embedding for 43.9%, and result materialisation for 2.7%. The Pearson correlation between query length in characters and total latency was -0.014, which indicates no meaningful linear association in this sample.
 
-- paper recommendation;
-
-- generated scientific advice;
-
-- a reranking stage.
-
-The intended use is to provide a transparent and reproducible dense-retrieval baseline.
+> These are observed sequential single-query results from the recorded Google Colab runtime. They are not production service-level guarantees or general benchmarks for search over the full arXiv corpus.
 
 ## Method
 
-The retrieval pipeline consists of four stages:
+The notebook validates the input schema, checks paper identifier uniqueness, and confirms that every labelled target is present in the collection. It then concatenates each title and abstract into a document string.
 
-1. **Data validation and exploratory analysis.** The notebook verifies the input schema, checks that article identifiers are unique, and confirms that every evaluation target appears in the indexed collection.
+`BAAI/bge-base-en-v1.5` creates the document and query embeddings. The implementation uses the model card's CLS-token representation, `last_hidden_state[:, 0]`, followed by L2 normalisation. The recommended BGE retrieval instruction is prepended to short queries only; documents do not receive it. [1] The normalised vectors are indexed with CPU-based `faiss.IndexFlatIP`, where inner-product ranking is equivalent to cosine-similarity ranking. [2]
 
-1. **Dense embedding generation.** Paper titles and abstracts are concatenated and embedded with `BAAI/bge-base-en-v1.5`. Queries receive the BGE retrieval instruction:
+For every evaluation query, the system retrieves five documents. **Mean Reciprocal Rank at 5** assigns the reciprocal of the rank of the known relevant document if it appears in the top five, otherwise zero, and averages this quantity over all queries.
 
-   ```
-   Represent this sentence for searching relevant passages:
-   ```
+## Data availability
 
-1. **Exact similarity search.** Embeddings are L2-normalized and stored in a CPU-based `faiss.IndexFlatIP` index. For normalized vectors, inner-product ranking is equivalent to cosine-similarity ranking.
+The course archive is **not included and no public download link is provided**. It contains the arXiv-derived metadata and the course evaluation split, whose redistribution conditions have not been verified. The repository is therefore an open record of the implementation, experiment configuration, and final outputs, rather than a self-contained runnable demo.
 
-1. **Evaluation and profiling.** The notebook calculates MRR@5, prints a qualitative top-5 retrieval example, and measures sequential latency for query embedding, FAISS search, and result materialization.
+The executed notebook retains its original Google Drive paths for authorised holders of the archive:
 
-## Model and index configuration
-
-| Component | Configuration |
-| --- | --- |
-| Embedding model | `BAAI/bge-base-en-v1.5` |
-| Embedding pooling | CLS token: `last_hidden_state[:, 0]` |
-| Vector normalization | L2 normalization |
-| Maximum input length | 512 tokens |
-| Query instruction | BGE retrieval instruction |
-| Vector index | `faiss.IndexFlatIP` |
-| Search type | Exact CPU inner-product search |
-| Evaluation metric | MRR@5 |
-| Random seed | 42 |
-
-> **Important:** The notebook uses CLS-token pooling. Any MRR@5 value must be generated from this exact configuration and must not be copied from an earlier experiment that used another pooling method.
-
-## Input data
-
-The input archive is intentionally excluded from version control. The notebook expects a ZIP archive with the following structure:
-
+```python
+ZIP_PATH = Path('/content/drive/MyDrive/nlp_s3_data.zip')
+ARTIFACT_DIR = Path('/content/drive/MyDrive/arxiv_retrieval')
 ```
+
+The expected archive structure is:
+
+```text
 nlp_s3_data.zip
 └── nlp_s3_project/
     ├── arxiv-metadata-s.json
     └── test_sample.csv
 ```
 
-### `arxiv-metadata-s.json`
+No raw data, evaluation labels, embedding matrices, FAISS indexes, model cache, or credentials are committed. A future independently reproducible version should cite a precise public data release and its licence. arXiv documents official mechanisms for metadata access, but this repository does not claim that the course split itself is an official arXiv release. [3]
 
-The metadata file must contain records with at least these fields:
+## Repository contents
 
-| Field | Description |
-| --- | --- |
-| `id` | Unique arXiv paper identifier |
-| `title` | Paper title |
-| `abstract` | Paper abstract |
-
-### `test_sample.csv`
-
-The evaluation file must contain the following columns:
-
-| Column | Description |
-| --- | --- |
-| `id` | Identifier of the known relevant paper |
-| `query` | Natural-language search query |
-
-An optional `abstract` column may be present for exploratory analysis.
-
-## Running in Google Colab
-
-The notebook is designed for Google Colab because the input archive and derived artifacts can be kept in Google Drive.
-
-1. Upload `notebooks/arxiv_dense_retrieval.ipynb` to Google Colab.
-
-1. Place the dataset archive in Google Drive.
-
-1. Update `ZIP_PATH` in the notebook if the archive has a different name or location:
-
-   ```python
-   ZIP_PATH = Path('/content/drive/MyDrive/nlp_s3_data.zip')
-   ```
-
-1. Optionally update the artifact directory:
-
-   ```python
-   ARTIFACT_DIR = Path('/content/drive/MyDrive/arxiv_retrieval')
-   ```
-
-1. Run all cells from top to bottom.
-
-The notebook installs the required retrieval packages in its first setup cell:
-
-```python
-%pip install -q -U "transformers>=4.45" "faiss-cpu>=1.8.0"
+```text
+.
+├── arxiv_dense_retrieval.ipynb
+├── README.md
+├── requirements.txt
+└── .gitignore
 ```
 
-## Generated artifacts
+The notebook includes the executed final outputs, data checks, exploratory analysis, a token-length audit, a qualitative top-5 example, MRR@5 calculation, and component-level latency profiling.
 
-The notebook writes reusable artifacts outside the Git repository:
+## Scope and limitations
 
-```
-arxiv_retrieval/
-├── article_embeddings_cls.npy
-├── faiss_index_cls.bin
-└── bge_base_en_v15_cls_encoder.onnx   # optional
-```
+The project reports a **single-stage dense-retrieval baseline**. It does not empirically compare BGE with BM25, TF-IDF, alternative embedding models, approximate FAISS indexes, or cross-encoder rerankers. It should not be used to claim that dense retrieval is universally superior to sparse retrieval.
 
-Set `REBUILD_INDEX = False` only when the embeddings and FAISS index were created from the same corpus and the same CLS-pooling configuration.
+The index uses exact search. At a larger collection scale, approximate FAISS alternatives such as HNSW or IVF should be compared against this baseline using both retrieval quality and latency. A cross-encoder reranker may improve ranking quality but would introduce extra inference latency and requires a separate measured experiment.
 
-## Evaluation
+## References
 
-For each evaluation query, the system retrieves the top five papers. Each query has one known relevant paper identifier.
-
-The reported metric is:
-
-$$
-\mathrm{MRR@5} = \frac{1}{|Q|}\sum_{q \in Q}
-\begin{cases}
-\frac{1}{\operatorname{rank}_q}, & \text{if the relevant document is in the top 5} \\
-0, & \text{otherwise}
-\end{cases}
-$$
-
-The project target is:
-
-```
-MRR@5 > 0.91
-```
-
-After a clean run, record the following values in the repository or a GitHub Release:
-
-- final MRR@5;
-
-- number of indexed papers and evaluation queries;
-
-- document truncation rate at 512 tokens;
-
-- Python, PyTorch, Transformers, and FAISS versions;
-
-- execution device and FAISS CPU-thread count;
-
-- mean, median, and p95 sequential latency;
-
-- a representative top-5 retrieval example.
-
-## Performance measurement
-
-Latency is measured sequentially for one query at a time after a warm-up phase. The notebook reports:
-
-- query embedding time;
-
-- FAISS search time;
-
-- result post-processing time;
-
-- total end-to-end latency;
-
-- mean, median, and p95 latency;
-
-- sequential throughput in queries per second.
-
-The FAISS index runs on CPU. When CUDA is available, query embedding may run on GPU; therefore, the end-to-end timing includes the CPU/GPU transfer required before FAISS search.
-
-> These measurements describe one Colab runtime and are not production service-level guarantees.
-
-## Limitations
-
-The project is a single-stage dense-retrieval baseline. It does not compare BGE against BM25, TF-IDF, alternative embedding models, approximate FAISS indexes, or cross-encoder rerankers.
-
-The index uses exact search. At a larger corpus scale, `IndexHNSWFlat` or IVF-based FAISS indexes should be evaluated against the baseline while reporting both retrieval quality and latency.
-
-The optional ONNX export is disabled by default. TensorRT compilation depends on a compatible CUDA and TensorRT environment and should be benchmarked separately from the native PyTorch baseline.
-
-## Data and model usage
-
-Do not commit the following files until their redistribution terms have been checked:
-
-- the source ZIP archive;
-
-- raw arXiv metadata;
-
-- evaluation CSV files;
-
-- cached model files;
-
-- embeddings;
-
-- FAISS indexes;
-
-- ONNX exports.
-
-The repository should contain code and documentation only unless the data license explicitly permits redistribution.
+[1]: https://huggingface.co/BAAI/bge-base-en-v1.5 "BAAI/bge-base-en-v1.5 model card"
+[2]: https://github.com/facebookresearch/faiss/wiki/Getting-started "FAISS: Getting started"
+[3]: https://info.arxiv.org/help/bulk_data.html "arXiv bulk data access"
