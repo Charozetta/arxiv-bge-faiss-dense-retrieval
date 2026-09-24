@@ -66,8 +66,7 @@ No raw data, evaluation labels, embedding matrices, FAISS indexes, model cache, 
 
 ```text
 .
-├── notebooks/
-│   └── arxiv_dense_retrieval.ipynb
+├── arxiv_dense_retrieval.ipynb
 ├── README.md
 ├── requirements.txt
 └── .gitignore
