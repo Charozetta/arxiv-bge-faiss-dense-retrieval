@@ -79,9 +79,3 @@ The notebook includes the executed final outputs, data checks, exploratory analy
 The project reports a **single-stage dense-retrieval baseline**. It does not empirically compare BGE with BM25, TF-IDF, alternative embedding models, approximate FAISS indexes, or cross-encoder rerankers. It should not be used to claim that dense retrieval is universally superior to sparse retrieval.
 
 The index uses exact search. At a larger collection scale, approximate FAISS alternatives such as HNSW or IVF should be compared against this baseline using both retrieval quality and latency. A cross-encoder reranker may improve ranking quality but would introduce extra inference latency and requires a separate measured experiment.
-
-## References
-
-[1]: https://huggingface.co/BAAI/bge-base-en-v1.5 "BAAI/bge-base-en-v1.5 model card"
-[2]: https://github.com/facebookresearch/faiss/wiki/Getting-started "FAISS: Getting started"
-[3]: https://info.arxiv.org/help/bulk_data.html "arXiv bulk data access"
